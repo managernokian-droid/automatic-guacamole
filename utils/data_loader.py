@@ -13,29 +13,17 @@ CACHE_PARQUET = os.path.join(CACHE_DIR, "suppliers.parquet")
 CACHE_META_NOKIAN = os.path.join(CACHE_DIR, "meta_nokian.json")
 CACHE_PARQUET_NOKIAN = os.path.join(CACHE_DIR, "nokian.parquet")
 
-SUPPLIERS_DTYPE = {
-    "ID товару": "int32",
-    "ID Постачальника": "int32",
-    "В наявності": "int32",
-    "Рік виготовлення шин": "Int16",
-    "Ширина профілю": "float32",
-    "Висота профілю": "float32",
-    "Діаметр": "float32",
-    "Вихідна оптова ціна": "float32",
-    "Вихідна роздрібна ціна": "float32",
-}
+# Columns to convert to float32 after loading (errors='coerce' handles text/empty cells)
+FLOAT32_COLS = [
+    "Ширина профиля", "Высота профиля",
+    "Исходная оптовая цена", "Исходная розничная цена",
+    "Ширина профілю", "Висота профілю",
+    "Вихідна оптова ціна", "Вихідна роздрібна ціна",
+]
 
-SUPPLIERS_DTYPE_RU = {
-    "ID товара": "int32",
-    "ID Поставщика": "int32",
-    "В наличии": "int32",
-    "Год изготовления шин": "Int16",
-    "Ширина профиля": "float32",
-    "Высота профиля": "float32",
-    "Диаметр": "float32",
-    "Исходная оптовая цена": "float32",
-    "Исходная розничная цена": "float32",
-}
+# Columns to convert to nullable int after loading
+INT32_COLS = ["ID товара", "ID Поставщика", "В наличии", "ID товару", "ID Постачальника", "В наявності"]
+INT16_COLS = ["Год изготовления шин", "Рік виготовлення шин"]
 
 CATEGORY_COLS_RU = [
     "Бренд", "Класс", "Модель", "Сезон", "Поставщик",
@@ -75,10 +63,18 @@ def _apply_categories(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _detect_dtype_map(df: pd.DataFrame) -> dict:
-    """Return dtype map matching the columns actually present in df."""
-    combined = {**SUPPLIERS_DTYPE_RU, **SUPPLIERS_DTYPE}
-    return {k: v for k, v in combined.items() if k in df.columns}
+def _coerce_numeric_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert numeric columns with errors='coerce' to handle text/empty cells."""
+    for col in FLOAT32_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float32")
+    for col in INT32_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int32")
+    for col in INT16_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int16")
+    return df
 
 
 def load_suppliers(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFrame, str]:
@@ -105,11 +101,9 @@ def load_suppliers(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFr
         return df, f"Дані завантажено з кешу ({date_str})"
 
     raw_bytes = uploaded_file.read()
-    # Read without forced dtype first to detect column names
-    df_probe = pd.read_excel(BytesIO(raw_bytes), nrows=0)
-    dtype_map = _detect_dtype_map(df_probe)
-
-    df = pd.read_excel(BytesIO(raw_bytes), dtype=dtype_map)
+    # Load all columns as default types — no dtype= to avoid ValueError on mixed cells
+    df = pd.read_excel(BytesIO(raw_bytes))
+    df = _coerce_numeric_cols(df)
     df = _apply_categories(df)
 
     # Filter out rows with 0 stock — detect column name
