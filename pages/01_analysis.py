@@ -12,6 +12,7 @@ import streamlit as st
 
 from utils.data_loader import clear_cache, load_suppliers
 from utils.filter_manager import (
+    FILTER_WIDGET_KEYS,
     apply_filters,
     delete_filter_set,
     load_saved_filters,
@@ -255,6 +256,8 @@ if st.session_state.df_suppliers is not None:
     if reset_btn:
         st.session_state.current_filters = {}
         st.session_state.filters_applied = False
+        for k in FILTER_WIDGET_KEYS:
+            st.session_state.pop(k, None)
         st.rerun()
 
     if apply_btn and class_selected:
@@ -287,6 +290,8 @@ if st.session_state.df_suppliers is not None:
             if st.sidebar.button("Завантажити", key="btn_load_filter"):
                 st.session_state.current_filters = saved[selected_saved]
                 st.session_state.filters_applied = False
+                for k in FILTER_WIDGET_KEYS:
+                    st.session_state.pop(k, None)
                 st.rerun()
         with del_col:
             if st.sidebar.button("Видалити", key="btn_del_filter"):

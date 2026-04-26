@@ -7,6 +7,12 @@ import streamlit as st
 
 SAVED_FILTERS_PATH = "data/saved_filters.json"
 
+# session_state keys used by multiselect widgets — must be cleared on reset/load
+FILTER_WIDGET_KEYS = [
+    "filter_class", "filter_season", "filter_year", "filter_vehicle_type",
+    "filter_brand", "filter_supplier", "filter_model", "filter_studded", "filter_city",
+]
+
 
 def _col(df: pd.DataFrame, *candidates) -> str | None:
     """Return first column name from candidates that exists in df."""
