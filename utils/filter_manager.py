@@ -75,16 +75,37 @@ def render_cascade_filters(df: pd.DataFrame) -> dict:
     # --- 3. Рік виготовлення ---
     year_col = _col(df, "Год изготовления шин", "Рік виготовлення шин")
     if year_col:
+        # Count rows with empty/zero year for the "no year" option
+        no_year_mask = (
+            current[year_col].isna()
+            | (current[year_col].astype(str).str.strip().isin(["", "0", "nan", "None"]))
+        )
+        no_year_count = no_year_mask.sum()
+        no_year_label = f"Без року виготовлення ({no_year_count:,})"
+
         available = sorted(current[year_col].dropna().unique(), reverse=True)
+        # Drop zero if present — those are already covered by no_year_mask
+        available = [v for v in available if str(v).replace(".0", "") not in ("0", "")]
         available_str = [str(int(v)) if str(v).endswith(".0") else str(v) for v in available]
-        labels = [f"{v} ({(current[year_col] == raw).sum():,})" for v, raw in zip(available_str, available)]
+        year_labels = [f"{v} ({(current[year_col] == raw).sum():,})" for v, raw in zip(available_str, available)]
+        # "Без року" is always first
+        labels = [no_year_label] + year_labels
+
         saved = st.session_state.current_filters.get("year", [])
         saved_labels = [l for l in labels if _strip_count(l) in saved]
         sel_labels = st.sidebar.multiselect("Рік виготовлення", options=labels, default=saved_labels, key="filter_year")
         sel = [_strip_count(l) for l in sel_labels]
         filters["year"] = sel
         if sel:
-            current = current[current[year_col].astype(str).str.replace(r"\.0$", "", regex=True).isin(sel)]
+            if "Без року виготовлення" in sel:
+                other = [v for v in sel if v != "Без року виготовлення"]
+                year_str = current[year_col].astype(str).str.replace(r"\.0$", "", regex=True)
+                current = current[
+                    no_year_mask | year_str.isin(other)
+                ]
+            else:
+                year_str = current[year_col].astype(str).str.replace(r"\.0$", "", regex=True)
+                current = current[year_str.isin(sel)]
     else:
         filters["year"] = []
 
@@ -203,8 +224,16 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
         col = next((c for c in candidates if c in df.columns), None)
         if col:
             if key == "year":
+                no_year_mask = (
+                    df[col].isna()
+                    | (df[col].astype(str).str.strip().isin(["", "0", "nan", "None"]))
+                )
                 year_str = df[col].astype(str).str.replace(r"\.0$", "", regex=True)
-                mask &= year_str.isin(values)
+                if "Без року виготовлення" in values:
+                    other = [v for v in values if v != "Без року виготовлення"]
+                    mask &= no_year_mask | year_str.isin(other)
+                else:
+                    mask &= year_str.isin(values)
             else:
                 mask &= df[col].astype(str).isin(values)
     return df[mask].copy()
