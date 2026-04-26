@@ -66,15 +66,17 @@ def _apply_categories(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _save_parquet(df: pd.DataFrame, path: str) -> None:
-    """Save df to Parquet, converting category columns to str first.
+    """Save df to Parquet, converting all object/category columns to str first.
 
-    pyarrow cannot serialize mixed-type category columns (e.g. str + float
-    category values produce ArrowInvalid). We store as plain str and restore
-    categories after reading from cache.
+    pyarrow cannot auto-detect a type for mixed-content columns such as
+    'Индекс нагрузки' ('91', '112/110', '91W', None) or category columns
+    with non-homogeneous values. Converting everything to str before writing
+    is the universal fix — categories are restored after reading from cache.
     """
     df_to_save = df.copy()
-    for col in df_to_save.select_dtypes(include="category").columns:
-        df_to_save[col] = df_to_save[col].astype(str)
+    for col in df_to_save.columns:
+        if df_to_save[col].dtype == object or str(df_to_save[col].dtype) == "category":
+            df_to_save[col] = df_to_save[col].astype(str)
     df_to_save.to_parquet(path, index=False)
 
 
