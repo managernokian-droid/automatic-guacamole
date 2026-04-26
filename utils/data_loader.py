@@ -13,17 +13,19 @@ CACHE_PARQUET = os.path.join(CACHE_DIR, "suppliers.parquet")
 CACHE_META_NOKIAN = os.path.join(CACHE_DIR, "meta_nokian.json")
 CACHE_PARQUET_NOKIAN = os.path.join(CACHE_DIR, "nokian.parquet")
 
-# Columns to convert to float32 after loading (errors='coerce' handles text/empty cells)
+# float32: replace comma decimal separator, then coerce
 FLOAT32_COLS = [
-    "Ширина профиля", "Высота профиля",
+    "Ширина профиля", "Высота профиля", "Диаметр",
     "Исходная оптовая цена", "Исходная розничная цена",
-    "Ширина профілю", "Висота профілю",
+    "Ширина профілю", "Висота профілю", "Діаметр",
     "Вихідна оптова ціна", "Вихідна роздрібна ціна",
 ]
 
-# Columns to convert to nullable int after loading
-INT32_COLS = ["ID товара", "ID Поставщика", "В наличии", "ID товару", "ID Постачальника", "В наявності"]
+# Int16: nullable (may have empty cells)
 INT16_COLS = ["Год изготовления шин", "Рік виготовлення шин"]
+
+# int32: fillna(0) — stock and IDs must be whole numbers
+INT32_COLS = ["ID товара", "ID Поставщика", "В наличии", "ID товару", "ID Постачальника", "В наявності"]
 
 CATEGORY_COLS_RU = [
     "Бренд", "Класс", "Модель", "Сезон", "Поставщик",
@@ -64,16 +66,19 @@ def _apply_categories(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _coerce_numeric_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert numeric columns with errors='coerce' to handle text/empty cells."""
+    """Convert numeric columns tolerating comma decimals, text, and empty cells."""
     for col in FLOAT32_COLS:
         if col in df.columns:
+            df[col] = (
+                df[col].astype(str).str.replace(",", ".", regex=False)
+            )
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("float32")
-    for col in INT32_COLS:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int32")
     for col in INT16_COLS:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int16")
+    for col in INT32_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype("int32")
     return df
 
 
