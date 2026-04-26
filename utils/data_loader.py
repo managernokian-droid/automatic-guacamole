@@ -65,6 +65,19 @@ def _apply_categories(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _save_parquet(df: pd.DataFrame, path: str) -> None:
+    """Save df to Parquet, converting category columns to str first.
+
+    pyarrow cannot serialize mixed-type category columns (e.g. str + float
+    category values produce ArrowInvalid). We store as plain str and restore
+    categories after reading from cache.
+    """
+    df_to_save = df.copy()
+    for col in df_to_save.select_dtypes(include="category").columns:
+        df_to_save[col] = df_to_save[col].astype(str)
+    df_to_save.to_parquet(path, index=False)
+
+
 def _coerce_numeric_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Convert numeric columns tolerating comma decimals, text, and empty cells."""
     for col in FLOAT32_COLS:
@@ -97,6 +110,7 @@ def load_suppliers(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFr
 
     if cache_valid:
         df = pd.read_parquet(CACHE_PARQUET)
+        df = _apply_categories(df)
         loaded_at = meta.get("loaded_at", "")
         try:
             dt = datetime.fromisoformat(loaded_at)
@@ -119,7 +133,7 @@ def load_suppliers(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFr
         df = df[df[stock_col] > 0].reset_index(drop=True)
 
     os.makedirs(CACHE_DIR, exist_ok=True)
-    df.to_parquet(CACHE_PARQUET, index=False)
+    _save_parquet(df, CACHE_PARQUET)
     _save_meta(CACHE_META, filename, filesize)
 
     return df, "Дані оновлено з файлу"
@@ -140,6 +154,7 @@ def load_nokian(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFrame
 
     if cache_valid:
         df = pd.read_parquet(CACHE_PARQUET_NOKIAN)
+        df = _apply_categories(df)
         loaded_at = meta.get("loaded_at", "")
         try:
             dt = datetime.fromisoformat(loaded_at)
@@ -152,7 +167,7 @@ def load_nokian(uploaded_file, force_reload: bool = False) -> tuple[pd.DataFrame
     df = pd.read_excel(BytesIO(raw_bytes))
 
     os.makedirs(CACHE_DIR, exist_ok=True)
-    df.to_parquet(CACHE_PARQUET_NOKIAN, index=False)
+    _save_parquet(df, CACHE_PARQUET_NOKIAN)
     _save_meta(CACHE_META_NOKIAN, filename, filesize)
 
     return df, "Прайс Nokian оновлено з файлу"
