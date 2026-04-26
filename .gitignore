@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# App runtime cache (Parquet + meta JSON generated at runtime)
+cache/*.parquet
+cache/*.json
