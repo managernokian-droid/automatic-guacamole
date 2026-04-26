@@ -77,7 +77,10 @@ def _display_table(df: pd.DataFrame, page_key: str = "page") -> None:
 
     start = (page - 1) * PAGE_SIZE
     end = start + PAGE_SIZE
-    st.dataframe(df.iloc[start:end], use_container_width=True, height=400)
+    df_show = df.iloc[start:end].copy()
+    for col in df_show.select_dtypes(include="category").columns:
+        df_show[col] = df_show[col].astype(str)
+    st.dataframe(df_show, use_container_width=True, height=400)
     st.caption(f"Показано {min(end, total)} з {total:,} рядків")
 
 
